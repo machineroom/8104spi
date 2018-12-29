@@ -37,9 +37,9 @@ static uint8_t mode=0;
 static uint8_t bits = 8;
 static uint32_t speed = 122000;
 
-char * spi_read(unsigned char MAP, int cnt, int file) {
+unsigned char spi_read(unsigned char MAP, int file) {
     unsigned char buf[2];
-    unsigned char buf2[255];
+    unsigned char ret;
     int status;
     struct spi_ioc_transfer xfer[2];
     memset (xfer,0,sizeof(xfer));
@@ -56,22 +56,19 @@ char * spi_read(unsigned char MAP, int cnt, int file) {
     }
  
     memset (xfer,0,sizeof(xfer));
-    memset(buf2, 0, sizeof buf2);
     buf[0] = 0x01;  // XXXXXXX1 = read
     xfer[0].tx_buf = (unsigned long)buf;
     xfer[0].len = 1; /* Length of  command to write*/
-    xfer[1].rx_buf = (unsigned long) buf2;
-    xfer[1].len = cnt; /* Length of Data to read */
+    xfer[1].rx_buf = (unsigned long) &ret;
+    xfer[1].len = 1; /* Length of Data to read */
     status = ioctl(file, SPI_IOC_MESSAGE(2), xfer);
     if (status < 0)
     {
         perror("SPI_IOC_MESSAGE");
         return NULL;
     }
-    //printf("env: %02x %02x %02x\n", buf[0], buf[1], buf[2]);
-    printf("ret: %02x %02x %02x %02x\n", buf2[0], buf2[1], buf2[2], buf2[3]);
  
-    return buf2;
+    return ret;
 }
  
 //////////
@@ -96,94 +93,12 @@ void spi_write(unsigned char MAP, unsigned char data, int file) {
     }
 }
 
-static void print_usage(const char *prog)
-{
-	printf("Usage: %s [-DsbdlHOLC3]\n", prog);
-	puts("  -D --device   device to use (default /dev/spidev1.1)\n"
-	     "  -s --speed    max speed (Hz)\n"
-	     "  -b --bpw      bits per word \n"
-	     "  -l --loop     loopback\n"
-	     "  -H --cpha     clock phase\n"
-	     "  -O --cpol     clock polarity\n"
-	     "  -L --lsb      least significant bit first\n"
-	     "  -C --cs-high  chip select active high\n"
-	     "  -3 --3wire    SI/SO signals shared\n");
-	exit(1);
-}
-
-static void parse_opts(int argc, char *argv[])
-{
-	while (1) {
-		static const struct option lopts[] = {
-			{ "device",  1, 0, 'D' },
-			{ "speed",   1, 0, 's' },
-			{ "bpw",     1, 0, 'b' },
-			{ "loop",    0, 0, 'l' },
-			{ "cpha",    0, 0, 'H' },
-			{ "cpol",    0, 0, 'O' },
-			{ "lsb",     0, 0, 'L' },
-			{ "cs-high", 0, 0, 'C' },
-			{ "3wire",   0, 0, '3' },
-			{ "no-cs",   0, 0, 'N' },
-			{ "ready",   0, 0, 'R' },
-			{ NULL, 0, 0, 0 },
-		};
-		int c;
-
-		c = getopt_long(argc, argv, "D:s:d:b:lHOLC3NR", lopts, NULL);
-
-		if (c == -1)
-			break;
-
-		switch (c) {
-		case 'D':
-			device = optarg;
-			break;
-		case 's':
-			speed = atoi(optarg);
-			break;
-		case 'b':
-			bits = atoi(optarg);
-			break;
-		case 'l':
-			mode |= SPI_LOOP;
-			break;
-		case 'H':
-			mode |= SPI_CPHA;
-			break;
-		case 'O':
-			mode |= SPI_CPOL;
-			break;
-		case 'L':
-			mode |= SPI_LSB_FIRST;
-			break;
-		case 'C':
-			mode |= SPI_CS_HIGH;
-			break;
-		case '3':
-			mode |= SPI_3WIRE;
-			break;
-		case 'N':
-			mode |= SPI_NO_CS;
-			break;
-		case 'R':
-			mode |= SPI_READY;
-			break;
-		default:
-			print_usage(argv[0]);
-			break;
-		}
-	}
-}
-
 int main(int argc, char *argv[])
 {
 	int ret = 0;
 	int fd;
     if (!bcm2835_init()) return 1;
 	
-	parse_opts(argc, argv);
-
 	fd = open(device, O_RDWR);
 	if (fd < 0)
 		pabort("can't open device");
@@ -235,7 +150,9 @@ int main(int argc, char *argv[])
     
     spi_write (0x82,0x10,fd); // SCK O/P
     spi_write (0x85,0x04,fd); // clear power on interrupt    
-    spi_read (0xC4,3,fd);
+    printf ("C4 = 0x%02X\n", spi_read (0xC4,fd));
+    printf ("C5 = 0x%02X\n", spi_read (0xC5,fd));
+    printf ("C6 = 0x%02X\n", spi_read (0xC6,fd));
     
 	close(fd);
 
